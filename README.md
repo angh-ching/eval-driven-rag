@@ -57,6 +57,8 @@ generation API.
 
 ```bash
 python3 src/chunk.py 512           # corpus -> data/chunks_512.jsonl
+python3 src/chunk.py 512 --selfcheck   # assert no text lost / no mid-word cuts
+python3 src/retrieve.py            # assert default fusion is unweighted RRF
 python3 src/metrics.py             # ablations + weight sweep + floor curve -> results/
 python3 bench/loadtest.py --concurrency 1,4,8 --n 20   # results/latency.json
 streamlit run app.py               # trace viewer
@@ -275,6 +277,17 @@ longer exist, and a football news site that was methodology-free). A fresh
 clone that wants a bigger fight should extend `SOURCES` in
 `scripts/fetch_corpus.py`; the eval harness does not need changes, because
 labels are doc-level.
+
+**Chunking has no tests, so it has a self-check.** `chunk.py --selfcheck`
+asserts the two invariants a cut must never break — no text lost or
+duplicated, no chunk starting mid-word — and reports the weakness it does
+have: **22 of 33 chunks (67%) end mid-sentence**, because the cut is
+fixed-size and not sentence-aware, with zero overlap. That is asserted as a
+ceiling rather than a floor, so it can only improve, and a sentence-aware
+chunker is the ablation that moves it. Both self-checks were verified by
+sabotaging the function and confirming the assertion fires; the mid-word check
+in particular is offset-based, because the obvious version (`first_word in
+text`) passes a partial word, since `"ution" in text` is true.
 
 ## Layout
 
