@@ -1,0 +1,72 @@
+[
+  {
+    "chunk_size": 256,
+    "method": "dense",
+    "hit@k": 0.88,
+    "all@k": 0.72,
+    "mrr": 0.7746666666666667,
+    "abstain@k": 0.0,
+    "n_answerable": 25,
+    "n_unanswerable": 5
+  },
+  {
+    "chunk_size": 256,
+    "method": "hybrid",
+    "hit@k": 0.92,
+    "all@k": 0.76,
+    "mrr": 0.7566666666666666,
+    "abstain@k": 0.0,
+    "n_answerable": 25,
+    "n_unanswerable": 5
+  },
+  {
+    "chunk_size": 512,
+    "method": "dense",
+    "hit@k": 0.92,
+    "all@k": 0.76,
+    "mrr": 0.7946666666666666,
+    "abstain@k": 0.0,
+    "n_answerable": 25,
+    "n_unanswerable": 5
+  },
+  {
+    "chunk_size": 512,
+    "method": "hybrid",
+    "hit@k": 0.92,
+    "all@k": 0.88,
+    "mrr": 0.8033333333333332,
+    "abstain@k": 0.0,
+    "n_answerable": 25,
+    "n_unanswerable": 5
+  },
+  {
+    "chunk_size": 512,
+    "method": "rerank",
+    "hit@k": 0.92,
+    "all@k": 0.88,
+    "mrr": 0.8213333333333332,
+    "abstain@k": 0.0,
+    "n_answerable": 25,
+    "n_unanswerable": 5
+  },
+  {
+    "chunk_size": 1024,
+    "method": "dense",
+    "hit@k": 0.92,
+    "all@k": 0.8,
+    "mrr": 0.7559999999999999,
+    "abstain@k": 0.0,
+    "n_answerable": 25,
+    "n_unanswerable": 5
+  },
+  {
+    "chunk_size": 1024,
+    "method": "hybrid",
+    "hit@k": 0.92,
+    "all@k": 0.88,
+    "mrr": 0.76,
+    "abstain@k": 0.0,
+    "n_answerable": 25,
+    "n_unanswerable": 5
+  }
+]

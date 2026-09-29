@@ -1,0 +1,86 @@
+[
+  {
+    "id": "intro",
+    "url": "https://socceraction.readthedocs.io/en/latest/documentation/intro.html",
+    "title": "Quickstart",
+    "chars": 4338
+  },
+  {
+    "id": "install",
+    "url": "https://socceraction.readthedocs.io/en/latest/documentation/install.html",
+    "title": "Installation",
+    "chars": 1930
+  },
+  {
+    "id": "faq",
+    "url": "https://socceraction.readthedocs.io/en/latest/documentation/faq.html",
+    "title": "FAQ",
+    "chars": 1695
+  },
+  {
+    "id": "data-index",
+    "url": "https://socceraction.readthedocs.io/en/latest/documentation/data/index.html",
+    "title": "Loading data",
+    "chars": 2458
+  },
+  {
+    "id": "data-statsbomb",
+    "url": "https://socceraction.readthedocs.io/en/latest/documentation/data/statsbomb.html",
+    "title": "Loading StatsBomb data",
+    "chars": 5562
+  },
+  {
+    "id": "data-wyscout",
+    "url": "https://socceraction.readthedocs.io/en/latest/documentation/data/wyscout.html",
+    "title": "Loading Wyscout data",
+    "chars": 4306
+  },
+  {
+    "id": "data-opta",
+    "url": "https://socceraction.readthedocs.io/en/latest/documentation/data/opta.html",
+    "title": "Loading Opta data",
+    "chars": 4314
+  },
+  {
+    "id": "spadl-index",
+    "url": "https://socceraction.readthedocs.io/en/latest/documentation/spadl/index.html",
+    "title": "Data representation",
+    "chars": 677
+  },
+  {
+    "id": "spadl-spadl",
+    "url": "https://socceraction.readthedocs.io/en/latest/documentation/spadl/spadl.html",
+    "title": "SPADL",
+    "chars": 4458
+  },
+  {
+    "id": "spadl-atomic_spadl",
+    "url": "https://socceraction.readthedocs.io/en/latest/documentation/spadl/atomic_spadl.html",
+    "title": "Atomic-SPADL",
+    "chars": 2697
+  },
+  {
+    "id": "valuing_actions-index",
+    "url": "https://socceraction.readthedocs.io/en/latest/documentation/valuing_actions/index.html",
+    "title": "Valuing actions",
+    "chars": 2266
+  },
+  {
+    "id": "valuing_actions-xT",
+    "url": "https://socceraction.readthedocs.io/en/latest/documentation/valuing_actions/xT.html",
+    "title": "Expected Threat (xT)",
+    "chars": 2172
+  },
+  {
+    "id": "valuing_actions-vaep",
+    "url": "https://socceraction.readthedocs.io/en/latest/documentation/valuing_actions/vaep.html",
+    "title": "VAEP",
+    "chars": 6770
+  },
+  {
+    "id": "valuing_actions-atomic_vaep",
+    "url": "https://socceraction.readthedocs.io/en/latest/documentation/valuing_actions/atomic_vaep.html",
+    "title": "Atomic-VAEP",
+    "chars": 4136
+  }
+]

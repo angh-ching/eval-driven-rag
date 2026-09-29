@@ -1,0 +1,75 @@
+Loading data
+¶
+Socceraction provides API clients for various popular event stream data
+sources. These clients enable fetching event streams and their corresponding
+metadata as Pandas DataFrames using a unified data model.
+Alternatively, you can also use
+kloppy
+to
+load data.
+Loading data with socceraction
+¶
+All API clients implemented in socceraction inherit from the
+EventDataLoader
+interface. This interface provides the
+following methods to retrieve data as a Pandas DataFrames with a unified data
+model (i.e.,
+Schema
+). The schema defines the minimal set of
+columns and their types that are returned by each method. Implementations of
+the
+EventDataLoader
+interface may add additional columns.
+Method
+Output schema
+Description
+competitions()
+CompetitionSchema
+All available competitions and seasons
+games(competition_id,
+season_id)
+GameSchema
+All available games in a season
+teams(game_id)
+TeamSchema
+Both teams that participated in a game
+players(game_id)
+PlayerSchema
+All players that participated in a game
+events(game_id)
+EventSchema
+The event stream of a game
+Currently, the following data providers are supported:
+Loading StatsBomb data
+Loading Wyscout data
+Loading Opta data
+Loading data with kloppy
+¶
+Similarly to socceraction,
+kloppy
+implements
+a unified data model for soccer data. The main differences between kloppy and
+socceraction are: (1) kloppy supports more data sources (including tracking
+data), (2) kloppy uses a more flexible object-based data model in contrast to
+socceraction’s dataframe-based model, and (3) kloppy covers a more complete
+set of events while socceraction focuses on-the-ball events. Thus, we recommend
+using kloppy if you want to load data from a source that is not supported by
+socceraction or when your analysis is not limited to on-the-ball events.
+The following code snippet shows how to load data from StatsBomb using
+kloppy:
+CODE:
+from kloppy import statsbomb
+dataset = statsbomb.load_open_data(match_id=8657)
+Instructions for loading data from other sources can be found in the
+kloppy documentation
+.
+You can then convert the data to the SPADL format using the
+convert_to_actions()
+function:
+CODE:
+from socceraction.spadl.kloppy import convert_to_actions
+spadl_actions = convert_to_actions(dataset, game_id=8657)
+Note
+Currently, the data model of kloppy is only complete for StatsBomb data.
+If you use kloppy to load data from other sources and convert it to the
+SPADL format, you may lose some information.
