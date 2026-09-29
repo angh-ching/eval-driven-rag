@@ -63,23 +63,30 @@ class BM25Retriever:
         return np.array(self.bm25.get_scores(re.findall(r"\w+", query.lower())))
 
 
-def rrf(dense, sparse, k=60):
+def rrf(dense, sparse, k=60, weights=(1.0, 1.0)):
     """Reciprocal rank fusion. Combines rankings, not raw scores.
 
     Scores from different retrievers are not comparable (BM25 is unbounded,
     cosine is in [-1,1]), so we fuse on rank position instead.
+
+    `weights` scales each retriever's contribution. Equal weights assume the
+    two are equally trustworthy per query, which the fusion-regression case
+    shows is false: a chunk dense ranks 2nd and BM25 ranks 13th lands 6th
+    after equal fusion, just outside the cut.
     """
     n = len(dense)
     out = np.zeros(n)
-    for scores in (dense, sparse):
+    for weight, scores in zip(weights, (dense, sparse)):
+        if weight == 0:
+            continue
         order = np.argsort(-scores)
         for rank, idx in enumerate(order):
-            out[idx] += 1.0 / (k + rank + 1)
+            out[idx] += weight / (k + rank + 1)
     return out
 
 
 def retrieve(query, size=512, method="hybrid", top_k=5, rerank_n=20,
-              threshold=None):
+              threshold=None, dense_weight=0.5):
     """Return up to top_k (chunk, score) pairs, best first.
 
     `threshold` is a relevance floor: if the best score falls under it,
@@ -94,7 +101,10 @@ def retrieve(query, size=512, method="hybrid", top_k=5, rerank_n=20,
     scores = dense
 
     if method in ("hybrid", "rerank"):
-        scores = rrf(dense, bm25_r.scores(query))
+        # Scaled so the pair sums to 2, matching rrf()'s equal-weight default:
+        # dense_weight=0.5 is the original unweighted RRF, exactly.
+        scores = rrf(dense, bm25_r.scores(query),
+                     weights=(2 * dense_weight, 2 * (1 - dense_weight)))
 
     order = np.argsort(-scores)[:rerank_n]
 
@@ -113,3 +123,32 @@ def retrieve(query, size=512, method="hybrid", top_k=5, rerank_n=20,
     if threshold is not None and (not out or out[0][1] < threshold):
         return []
     return out
+
+
+def _selfcheck():
+    """The default fusion path must be bit-identical to unweighted RRF, and the
+    weight endpoints must be the single retrievers. A weight pair that does not
+    sum to 2 silently rescales every fused score, which changes the relevance
+    floor's meaning without changing any ranking."""
+    import numpy as np
+    d = np.array([0.9, 0.8, 0.7, 0.1])
+    b = np.array([0.1, 0.2, 0.3, 0.9])
+
+    def unweighted():
+        out = np.zeros(len(d))
+        for s in (d, b):
+            for rank, idx in enumerate(np.argsort(-s)):
+                out[idx] += 1.0 / (60 + rank + 1)
+        return out
+
+    assert np.allclose(rrf(d, b), unweighted()), "default weights changed"
+    assert np.allclose(rrf(d, b, weights=(1.0, 1.0)), unweighted())
+    assert list(np.argsort(-rrf(d, b, weights=(2.0, 0.0)))) == \
+        list(np.argsort(-d)), "dense_weight=1.0 is not dense-only"
+    assert list(np.argsort(-rrf(d, b, weights=(0.0, 2.0)))) == \
+        list(np.argsort(-b)), "dense_weight=0.0 is not BM25-only"
+    print("rrf selfcheck ok: default = unweighted, endpoints = single retrievers")
+
+
+if __name__ == "__main__":
+    _selfcheck()

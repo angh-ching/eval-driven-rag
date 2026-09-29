@@ -18,7 +18,7 @@ GOLDEN = [json.loads(l)
           for l in (ROOT / "eval/golden.jsonl").read_text().splitlines()]
 
 
-def evaluate(size=512, method="dense", k=5, threshold=None):
+def evaluate(size=512, method="dense", k=5, threshold=None, dense_weight=0.5):
     """Score the two slices separately.
 
     Answerable and unanswerable items measure different things and have
@@ -32,7 +32,8 @@ def evaluate(size=512, method="dense", k=5, threshold=None):
 
     for item in GOLDEN:
         results = retrieve(item["question"], size=size, method=method,
-                           top_k=k, threshold=threshold)
+                           top_k=k, threshold=threshold,
+                           dense_weight=dense_weight)
         got = [c["doc_id"] for c, _ in results]
         need = set(item["answer_doc_ids"])
 
@@ -148,6 +149,53 @@ def sweep_threshold(method="rerank", size=512, k=5):
     return best
 
 
+def sweep_dense_weight(k=5, size=512):
+    """How much should fusion trust dense over BM25, per query?
+
+    Equal weights (0.5) are the assumption the fusion-regression case breaks:
+    a chunk dense ranks 2nd and BM25 ranks 13th lands 6th after equal fusion.
+    Trusting dense more should recover it, and the cost is that a genuinely
+    lexical query loses. Publishing the whole curve rather than one value
+    keeps a weight picked on these 24 questions from reading as a tuned
+    constant.
+
+    dense_weight 0.0 is BM25 alone and 1.0 is dense alone, so the curve also
+    shows what fusion buys at each end.
+    """
+    rows = []
+    for w in [round(0.05 * i, 2) for i in range(21)]:
+        r = evaluate(size=size, method="hybrid", k=k, dense_weight=w)
+        # Which answerable questions the equal-weight build already loses.
+        lost = []
+        for item in GOLDEN:
+            if not item["answer_doc_ids"]:
+                continue
+            got = {c["doc_id"] for c, _ in
+                   retrieve(item["question"], size=size, method="hybrid",
+                            top_k=k, dense_weight=w)}
+            if not set(item["answer_doc_ids"]).issubset(got):
+                lost.append(item["id"])
+        rows.append({"dense_weight": w, "lost_ids": lost, **r})
+        print(f"w={w:>4.2f}  hit@5={r['hit@k']:.3f}  all@5={r['all@k']:.3f}  "
+              f"mrr={r['mrr']:.3f}  all@5 misses: {lost or 'none'}")
+
+    (ROOT / "results/dense_weight.json").write_text(json.dumps(rows, indent=2))
+    md = ["Dense-vs-BM25 fusion weight sweep. dense_weight=0 is BM25 alone,",
+          "1.0 is dense alone, 0.5 is the equal-weight RRF the system ships.",
+          "Reported as a curve: any single value here was read off these 24",
+          "answerable questions, so none of them is a tuned constant.",
+          "",
+          "| dense_weight | hit@5 | all@5 | MRR | all@5 misses |",
+          "|---|---|---|---|---|"]
+    md += [f"| {r['dense_weight']:.2f} | {r['hit@k']:.3f} | {r['all@k']:.3f} | "
+           f"{r['mrr']:.3f} | {', '.join(map(str, r['lost_ids'])) or 'none'} |"
+           for r in rows]
+    (ROOT / "results/dense_weight.md").write_text("\n".join(md))
+    print("\nwrote results/dense_weight.json and results/dense_weight.md")
+    return rows
+
+
 if __name__ == "__main__":
     run_ablation()
+    sweep_dense_weight()
     sweep_threshold()

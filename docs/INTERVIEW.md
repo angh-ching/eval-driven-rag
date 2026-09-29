@@ -87,15 +87,17 @@ corpus — so I scoped that rather than hiding it.
 
 **"Hybrid made your score better, so why does the README list fusion as a bug?"**
 
-Because I traced the two remaining misses through the stages and they lose the
-same document the same way. For one of them the correct chunk ranks **2nd by
-dense, 13th by BM25, 6th after RRF** — one place outside the cut. Dense gets
-it right, BM25 drops it because it rewards the literal word "convert" and
-misses the paraphrased intent, and RRF averages the two rankings into a loss.
-The hybrid that lifts all@5 overall costs this question individually. That's a
-real, characterizable failure, not a shrug — the obvious fix is weighted RRF
-that trusts dense more on lexically-poor queries, and `rrf()` already takes the
-constant.
+Because I traced the two remaining misses to the stages and found the fix I
+expected was the wrong one. Both lose the same required document, but in
+opposite directions: for one question that chunk is dense rank 3 and BM25
+rank 14, for the other it's dense rank 18 and BM25 rank 7. So I swept a fusion
+weight instead of guessing one, and the curve says 0.55–0.70 lifts all@5 from
+0.917 to 0.958 with no regression. I still ship at 0.5, because I read that
+0.6 off the same 24 questions I'm reporting it on — publishing the curve is
+honest, quoting the peak is not. And the peak doesn't fix both anyway: past
+0.70 a third question breaks, because it's the same shape as the one weight
+can't help. The real fix is choosing the weight per query, which needs a
+held-out set to fit against.
 
 **"How do you know the numbers are real and not overfitting to your own eval?"**
 

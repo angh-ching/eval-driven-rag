@@ -57,7 +57,7 @@ generation API.
 
 ```bash
 python3 src/chunk.py 512           # corpus -> data/chunks_512.jsonl
-python3 src/metrics.py             # ablation ladder -> results/ablations.md
+python3 src/metrics.py             # ablations + weight sweep + floor curve -> results/
 python3 bench/loadtest.py --concurrency 1,4,8 --n 20   # results/latency.json
 streamlit run app.py               # trace viewer
 ```
@@ -118,9 +118,10 @@ What still holds, and what moved:
 - The cross-encoder reranker lifts MRR (0.889 → 0.910) without changing
   `hit@5` or `all@5`. It reorders, it does not rescue — the expected behavior
   of a second-stage precision tool.
-- **Fusion can lose a question that each retriever alone would have found.**
-  For id 19 the correct chunk ranks **2nd by dense, 13th by BM25, 6th after
-  RRF** — fused just outside the cut. See "Known failures" below.
+- **A single fusion weight cannot fix both remaining failures, because they are
+  opposite.** For id 19 the answer chunk is dense rank 3, BM25 rank 14; for
+  id 24 it is dense rank 18, BM25 rank 7. One question needs a retriever that
+  trusts dense, the other needs one that trusts BM25. See "Known failures".
 - The eval set is the asset, and auditing it was the highest-value hour spent
   on this project. 30 hand-labeled items with doc-level labels, reusable
   across chunk sizes because labels attach to documents, not chunks.
@@ -128,28 +129,50 @@ What still holds, and what moved:
 The fix for saturation is a larger corpus, not a better retriever. That is
 scoped as the next iteration rather than quietly omitted.
 
-### Known failures (both are the same bug)
+### Known failures (opposite, not the same bug)
 
-At 512/hybrid, only two questions miss, and both lose the *same* required
-document — `spadl-spadl` — the same way:
+At 512/hybrid, only two questions miss, and both lose the same required
+document — `spadl-spadl::001` — by opposite routes:
 
-| id | question | needed | retrieved instead |
+| id | question | needed | dense | BM25 | RRF (equal) |
+|---|---|---|---|---|---|
+| 19 | raw provider data → unified action representation | data-index, spadl-spadl | **3** | 14 | 7 |
+| 24 | convert actions into a pandas dataframe | intro, spadl-spadl | 18 | **7** | 11 |
+
+Both lose the second required document, which is exactly what `all@5` is
+measuring. But id 19 wants more dense and id 24 wants more BM25, so no
+constant weight recovers both — see the sweep below.
+
+### Fusion weight sweep (`results/dense_weight.md`)
+
+The obvious fix was weighted RRF: trust dense more. `rrf()` now takes a
+`weights` tuple, and the whole curve is published rather than one value,
+because any single number here was read off these same 24 questions.
+
+| dense_weight | all@5 | MRR | all@5 misses |
 |---|---|---|---|
-| 19 | raw provider data → unified action representation | data-index, spadl-spadl | faq, data-index, spadl-index, valuing_actions-* |
-| 24 | convert actions into a pandas dataframe | intro, spadl-spadl | intro found, spadl-spadl lost |
+| 0.00 (BM25 alone) | 0.833 | 0.722 | 4, 9, 19, 24 |
+| 0.50 (shipped) | 0.917 | 0.889 | 19, 24 |
+| 0.55–0.70 | **0.958** | ~0.87 | 24 |
+| 0.75 | 0.917 | 0.844 | 21, 24 |
+| 1.00 (dense alone) | 0.875 | 0.838 | 21, 24, 25 |
 
-Tracing `spadl-spadl::001` through the stages explains it:
+`all@5` 0.917 → 0.958 (23 of 24) over 0.55–0.70, and it costs nothing: no
+question that already passed stops passing. Past 0.70 id 21 breaks, because
+id 21 is the same shape as id 24 — a lexically-worded question that BM25 was
+carrying.
 
-```
-rank of the correct chunk   dense = 2      BM25 = 13      RRF = 6   -> outside top-5
-```
+**MRR moves the other way** (0.889 → ~0.87) and the headline is not
+gratuitous: the plateau trades a little rank precision for one more multi-hop
+document found. The system still ships at 0.5, because 0.6 was chosen by
+reading this table and reporting 0.958 would be reporting a number fitted to
+the eval set it is measured on. The sweep is the deliverable; the operating
+point is not a claim.
 
-Dense retrieval puts the answer second. BM25 — which rewards the literal word
-"convert" and misses the paraphrased intent — drops it to 13th. RRF averages
-the two rankings and lands at 6, one place outside the cut. The hybrid that
-lifts `all@5` overall costs these two questions individually. Weighted RRF
-that trusts the stronger retriever per query is the obvious next experiment;
-`rrf()` already takes `k`, and a weights tuple is a two-line change.
+**The real fix is a per-query retriever choice**, not a better constant: pick
+the weight from the query (a question dense scores highly *and* whose top BM25
+ranks are weak is a semantic one). That needs a held-out set to fit against,
+which is why it is scoped rather than built.
 
 ### Abstention (`results/threshold.md`)
 
