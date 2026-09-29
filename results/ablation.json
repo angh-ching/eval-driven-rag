@@ -2,71 +2,71 @@
   {
     "chunk_size": 256,
     "method": "dense",
-    "hit@k": 0.88,
-    "all@k": 0.72,
-    "mrr": 0.7746666666666667,
+    "hit@k": 0.9166666666666666,
+    "all@k": 0.75,
+    "mrr": 0.8069444444444445,
     "abstain@k": 0.0,
-    "n_answerable": 25,
-    "n_unanswerable": 5
+    "n_answerable": 24,
+    "n_unanswerable": 6
   },
   {
     "chunk_size": 256,
     "method": "hybrid",
-    "hit@k": 0.92,
-    "all@k": 0.76,
-    "mrr": 0.7566666666666666,
+    "hit@k": 1.0,
+    "all@k": 0.875,
+    "mrr": 0.8125,
     "abstain@k": 0.0,
-    "n_answerable": 25,
-    "n_unanswerable": 5
+    "n_answerable": 24,
+    "n_unanswerable": 6
   },
   {
     "chunk_size": 512,
     "method": "dense",
-    "hit@k": 0.92,
-    "all@k": 0.76,
-    "mrr": 0.7946666666666666,
+    "hit@k": 1.0,
+    "all@k": 0.875,
+    "mrr": 0.8381944444444445,
     "abstain@k": 0.0,
-    "n_answerable": 25,
-    "n_unanswerable": 5
+    "n_answerable": 24,
+    "n_unanswerable": 6
   },
   {
     "chunk_size": 512,
     "method": "hybrid",
-    "hit@k": 0.92,
-    "all@k": 0.88,
-    "mrr": 0.8033333333333332,
+    "hit@k": 1.0,
+    "all@k": 0.9166666666666666,
+    "mrr": 0.8888888888888888,
     "abstain@k": 0.0,
-    "n_answerable": 25,
-    "n_unanswerable": 5
+    "n_answerable": 24,
+    "n_unanswerable": 6
   },
   {
     "chunk_size": 512,
     "method": "rerank",
-    "hit@k": 0.92,
-    "all@k": 0.88,
-    "mrr": 0.8213333333333332,
+    "hit@k": 1.0,
+    "all@k": 0.9166666666666666,
+    "mrr": 0.9097222222222222,
     "abstain@k": 0.0,
-    "n_answerable": 25,
-    "n_unanswerable": 5
+    "n_answerable": 24,
+    "n_unanswerable": 6
   },
   {
     "chunk_size": 1024,
     "method": "dense",
-    "hit@k": 0.92,
-    "all@k": 0.8,
-    "mrr": 0.7559999999999999,
+    "hit@k": 1.0,
+    "all@k": 0.875,
+    "mrr": 0.8083333333333332,
     "abstain@k": 0.0,
-    "n_answerable": 25,
-    "n_unanswerable": 5
+    "n_answerable": 24,
+    "n_unanswerable": 6
   },
   {
     "chunk_size": 1024,
     "method": "hybrid",
-    "hit@k": 0.92,
-    "all@k": 0.88,
-    "mrr": 0.76,
+    "hit@k": 1.0,
+    "all@k": 0.9166666666666666,
+    "mrr": 0.8402777777777777,
     "abstain@k": 0.0,
-    "n_answerable": 25,
-    "n_unanswerable": 5
+    "n_answerable": 24,
+    "n_unanswerable": 6
   }
 ]

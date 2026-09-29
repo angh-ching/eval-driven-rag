@@ -72,8 +72,9 @@ def run_ablation():
     (ROOT / "results/ablation.json").write_text(json.dumps(rows, indent=2))
 
     md = ["Answerable slice and unanswerable slice are scored separately.",
-          "hit@5 / all@5 / MRR are over the 25 answerable questions;",
-          "abstain@5 is over the 5 unanswerable ones (no threshold: always 0).",
+          f"hit@5 / all@5 / MRR are over the {rows[0]['n_answerable']} answerable questions;",
+          f"abstain@5 is over the {rows[0]['n_unanswerable']} unanswerable ones "
+          "(no threshold: always 0).",
           "",
           "| chunk | method | hit@5 | all@5 | MRR | abstain@5 |",
           "|---|---|---|---|---|---|"]

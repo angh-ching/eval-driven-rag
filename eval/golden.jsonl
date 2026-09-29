@@ -1,6 +1,6 @@
 {"id": 1, "question": "How do I get started with the library for the first time?", "answer_doc_ids": ["intro"], "hops": 1, "answerable": true}
 {"id": 2, "question": "What do I need to install before I can use this?", "answer_doc_ids": ["install"], "hops": 1, "answerable": true}
-{"id": 3, "question": "Why is my data not loading, and where should I report a bug?", "answer_doc_ids": ["faq"], "hops": 1, "answerable": true}
+{"id": 3, "question": "Why is my data not loading, and where should I report a bug?", "answer_doc_ids": [], "hops": 1, "answerable": false}
 {"id": 4, "question": "What is the common way to pull in football event data regardless of provider?", "answer_doc_ids": ["data-index"], "hops": 1, "answerable": true}
 {"id": 5, "question": "How do I fetch match events from StatsBomb?", "answer_doc_ids": ["data-statsbomb"], "hops": 1, "answerable": true}
 {"id": 6, "question": "How do I load Wyscout tracking data?", "answer_doc_ids": ["data-wyscout"], "hops": 1, "answerable": true}
@@ -8,7 +8,7 @@
 {"id": 8, "question": "What attributes make up a single on-the-ball action in your unified format?", "answer_doc_ids": ["spadl-spadl"], "hops": 1, "answerable": true}
 {"id": 9, "question": "What is the difference between the standard action language and the more granular one?", "answer_doc_ids": ["spadl-index", "spadl-spadl", "spadl-atomic_spadl"], "hops": 1, "answerable": true}
 {"id": 10, "question": "How do I represent a game as a sequence of actions with twelve attributes?", "answer_doc_ids": ["spadl-spadl"], "hops": 1, "answerable": true}
-{"id": 11, "question": "How do I break a match into periods or phases?", "answer_doc_ids": ["spadl-atomic_spadl"], "hops": 1, "answerable": true}
+{"id": 11, "question": "How do I break a match into periods or phases?", "answer_doc_ids": ["valuing_actions-xT"], "hops": 1, "answerable": true}
 {"id": 12, "question": "What are the different ways I can value player actions?", "answer_doc_ids": ["valuing_actions-index"], "hops": 1, "answerable": true}
 {"id": 13, "question": "What does the expected threat model actually measure?", "answer_doc_ids": ["valuing_actions-xT"], "hops": 1, "answerable": true}
 {"id": 14, "question": "How is the value of each zone on the pitch learned?", "answer_doc_ids": ["valuing_actions-xT"], "hops": 1, "answerable": true}
@@ -16,7 +16,7 @@
 {"id": 16, "question": "How many previous actions does the model look at to represent the current situation?", "answer_doc_ids": ["valuing_actions-vaep"], "hops": 1, "answerable": true}
 {"id": 17, "question": "What classifier is trained to learn scoring probabilities?", "answer_doc_ids": ["valuing_actions-vaep"], "hops": 1, "answerable": true}
 {"id": 18, "question": "What is the difference between atomic-VAEP and plain VAEP?", "answer_doc_ids": ["valuing_actions-atomic_vaep", "valuing_actions-vaep"], "hops": 2, "answerable": true}
-{"id": 19, "question": "How do I turn raw provider data into the unified action representation?", "answer_doc_ids": ["data-statsbomb", "spadl-spadl"], "hops": 2, "answerable": true}
+{"id": 19, "question": "How do I turn raw provider data into the unified action representation?", "answer_doc_ids": ["data-index", "spadl-spadl"], "hops": 2, "answerable": true}
 {"id": 20, "question": "What is a possession and how is the pitch divided into zones for scoring threat?", "answer_doc_ids": ["valuing_actions-xT"], "hops": 1, "answerable": true}
 {"id": 21, "question": "How do I install the package and check it works?", "answer_doc_ids": ["install", "intro"], "hops": 2, "answerable": true}
 {"id": 22, "question": "What is the body part and result field on an action used for?", "answer_doc_ids": ["spadl-spadl"], "hops": 1, "answerable": true}

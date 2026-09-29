@@ -72,45 +72,84 @@ interviewer is likely to ask, with answers.
 
 Two slices, two denominators, never folded together:
 
-- **25 answerable** questions — `hit@5`, `all@5`, MRR
-- **5 unanswerable** questions — `abstain@5`, the share where the retriever
+- **24 answerable** questions — `hit@5`, `all@5`, MRR
+- **6 unanswerable** questions — `abstain@5`, the share where the retriever
   returned nothing. 0.000 on every row below because these runs use no
   relevance floor; see the next section.
 
 | chunk | method | hit@5 | all@5 | MRR | abstain@5 |
 |---|---|---|---|---|---|
-| 256 | dense | 0.880 | 0.720 | 0.775 | 0.000 |
-| 256 | hybrid | 0.920 | 0.760 | 0.757 | 0.000 |
-| 512 | dense | 0.920 | 0.760 | 0.795 | 0.000 |
-| 512 | hybrid | 0.920 | 0.880 | 0.803 | 0.000 |
-| 512 | rerank | 0.920 | 0.880 | 0.821 | 0.000 |
-| 1024 | dense | 0.920 | 0.800 | 0.756 | 0.000 |
-| 1024 | hybrid | 0.920 | 0.880 | 0.760 | 0.000 |
+| 256 | dense | 0.917 | 0.750 | 0.807 | 0.000 |
+| 256 | hybrid | 1.000 | 0.875 | 0.812 | 0.000 |
+| 512 | dense | 1.000 | 0.875 | 0.838 | 0.000 |
+| 512 | hybrid | 1.000 | 0.917 | 0.889 | 0.000 |
+| 512 | rerank | 1.000 | 0.917 | 0.910 | 0.000 |
+| 1024 | dense | 1.000 | 0.875 | 0.808 | 0.000 |
+| 1024 | hybrid | 1.000 | 0.917 | 0.840 | 0.000 |
 
-**Correcting an earlier number.** This table previously reported `hit@5` 0.767
-and `all@5` 0.733 for the best row. Those were computed over all 30 questions,
-including the 5 with no gold documents — items a top-5 retriever can never get
-right, because returning `top_k` results is what it is built to do. Leaving
-them in the denominator understated the headline by five unwinnable items. The
-real best row is **hit@5 0.920 (23/25), all@5 0.880 (22/25)**.
+**Two corrections, both of which raised the score. Neither was a retrieval
+improvement.**
 
-**Read this honestly.** The deltas are small — 0.880 → 0.920 on `hit@5` —
-and that is a property of the corpus, not a failure of the methods. At 512
-tokens the corpus is only ~33 chunks, so top-5 covers a sixth of it and the
-task has little headroom. A metric that cannot move is not evidence the
-ladder works. The claims that do hold:
+1. The table previously reported `hit@5` 0.767 and `all@5` 0.733 for the best
+   row, computed over all 30 questions. Five of those had no gold documents —
+   items a top-5 retriever can never win, because returning `top_k` is what it
+   is built to do. Leaving them in the denominator understated the result.
+2. Then, auditing all 30 labels against the corpus found **three labels that
+   were wrong** — see [`results/label_audit.md`](results/label_audit.md). One
+   question ("where should I report a bug?") was labeled with a document that
+   cannot answer it; the words appear in *no* document in the corpus, so it
+   moved to the unanswerable slice. Two others pointed at the wrong document.
+   `hit@5` is now 1.000 (24/24).
 
-- `all@5` moves more than `hit@5` (0.720 → 0.880), and `all@5` is the metric
-  that predicts answer quality on multi-hop questions. Hybrid retrieval is
-  what helps — it finds the *second* required document, not just the first.
-- The cross-encoder reranker lifts MRR (0.803 → 0.821) without changing
-  `hit@5` or `all@5`. It reorders, it does not rescue — exactly the expected
-  behavior of a second-stage precision tool, and worth naming as such.
-- The eval set is the asset. 30 hand-labeled items with doc-level labels,
-  reusable across chunk sizes because labels attach to documents, not chunks.
+The best row is now **hit@5 1.000 (24/24), all@5 0.917 (22/24)**.
 
-The fix for the headroom problem is a larger corpus, not a better retriever.
-That is scoped as the next iteration rather than quietly omitted.
+**Read this honestly — and this is now the important caveat.** `hit@5` 1.000
+means the metric is *saturated*, not that the system is perfect. The
+remaining headroom is entirely in `all@5`, and only two questions still miss
+(both below). The number to quote is 22 of 24, not 24 of 24, and not 0.917
+without the denominator. A saturated metric cannot demonstrate improvement;
+that is the single strongest argument for a larger corpus.
+
+What still holds, and what moved:
+
+- `all@5` rises 0.750 → 0.917 across the ladder and is the metric that predicts
+  answer quality on multi-hop questions. Hybrid retrieval is what does it —
+  it finds the *second* required document, not just the first.
+- The cross-encoder reranker lifts MRR (0.889 → 0.910) without changing
+  `hit@5` or `all@5`. It reorders, it does not rescue — the expected behavior
+  of a second-stage precision tool.
+- **Fusion can lose a question that each retriever alone would have found.**
+  For id 19 the correct chunk ranks **2nd by dense, 13th by BM25, 6th after
+  RRF** — fused just outside the cut. See "Known failures" below.
+- The eval set is the asset, and auditing it was the highest-value hour spent
+  on this project. 30 hand-labeled items with doc-level labels, reusable
+  across chunk sizes because labels attach to documents, not chunks.
+
+The fix for saturation is a larger corpus, not a better retriever. That is
+scoped as the next iteration rather than quietly omitted.
+
+### Known failures (both are the same bug)
+
+At 512/hybrid, only two questions miss, and both lose the *same* required
+document — `spadl-spadl` — the same way:
+
+| id | question | needed | retrieved instead |
+|---|---|---|---|
+| 19 | raw provider data → unified action representation | data-index, spadl-spadl | faq, data-index, spadl-index, valuing_actions-* |
+| 24 | convert actions into a pandas dataframe | intro, spadl-spadl | intro found, spadl-spadl lost |
+
+Tracing `spadl-spadl::001` through the stages explains it:
+
+```
+rank of the correct chunk   dense = 2      BM25 = 13      RRF = 6   -> outside top-5
+```
+
+Dense retrieval puts the answer second. BM25 — which rewards the literal word
+"convert" and misses the paraphrased intent — drops it to 13th. RRF averages
+the two rankings and lands at 6, one place outside the cut. The hybrid that
+lifts `all@5` overall costs these two questions individually. Weighted RRF
+that trusts the stronger retriever per query is the obvious next experiment;
+`rrf()` already takes `k`, and a weights tuple is a two-line change.
 
 ### Abstention (`results/threshold.md`)
 
@@ -122,37 +161,34 @@ trade-off curve is published:
 
 | floor | answerable all@5 kept | unanswerable abstain@5 |
 |---|---|---|
-| -10.249 | 1.000 | 0.200 | ← selected |
-| -7.574 | 1.000 | 0.200 |
-| -6.334 | 0.920 | 0.200 |
-| -6.248 | 0.920 | 0.600 |
-| -5.685 | 0.880 | 0.600 |
-| -3.330 | 0.800 | 0.800 |
-| -0.271 | 0.600 | 0.800 |
-| 0.022 | 0.560 | 1.000 |
-| 7.214 | 0.040 | 1.000 |
+| -10.249 | 1.000 | 0.167 | ← selected |
+| -7.574 | 1.000 | 0.167 |
+| -6.334 | 0.958 | 0.333 |
+| -6.248 | 0.958 | 0.667 |
+| -5.685 | 0.917 | 0.667 |
+| -3.330 | 0.833 | 0.833 |
+| -0.271 | 0.625 | 0.833 |
+| 0.022 | 0.583 | 1.000 |
+| 7.214 | 0.042 | 1.000 |
 
 **This result is unimpressive and the table shows why.** The zero-regression
-point rejects **1 of 5** unanswerable questions. Pushing higher buys rejection
+point rejects **1 of 6** unanswerable questions. Pushing higher buys rejection
 only by silencing questions the corpus can answer: at -6.248 the system
-declines 3 of 5 unanswerables, but it also silently refuses to answer id 1
-("How do I get started with the library for the first time?") and id 23.
-Getting to a perfect 5/5 costs 44% of answerable recall.
+declines 4 of 6 unanswerables, but it also silently refuses to answer id 1
+("How do I get started with the library for the first time?"). Getting to a
+perfect 6/6 costs 42% of answerable recall.
 
 The selection rule in `sweep_threshold()` is therefore *maximize rejection
 subject to silencing nothing already correct* — not a retention-percentage
 bound. An earlier version used "keep ≥90% of answerable," which is only 2
-questions at n=25, and it picked a floor that broke a real query while a
+questions at n=24, and it picked a floor that broke a real query while a
 strictly better zero-regression point sat one row away.
 
-Score overlap is the underlying cause. At 512/rerank, only 11 of 25 answerable
-questions sit entirely below every unanswerable one, versus 21 of 25 for
-dense. Reranking is the method worth building a floor for — and even it cannot
-separate the classes, because a confidently-worded unanswerable question
-retrieves a topically-adjacent chunk and the cross-encoder scores it high.
-The honest conclusion is that 5 unanswerable items is too few to fit or
-validate a floor on; the curve is the deliverable, the operating point is not
-a claim.
+Score overlap is the underlying cause. The cross-encoder scores a topically
+adjacent chunk highly for a confidently-worded unanswerable question, so the
+two score distributions overlap and no floor separates them. The honest
+conclusion is that **6 unanswerable items is far too few to fit or validate a
+floor on**; the curve is the deliverable, the operating point is not a claim.
 
 ### Generation and serving — harness written, not yet measured
 
