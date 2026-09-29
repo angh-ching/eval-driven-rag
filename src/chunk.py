@@ -4,6 +4,7 @@ Baseline strategy: naive fixed-size, whitespace-aware. Paragraph-aware
 chunking and overlap are later ablation rungs.
 """
 import json
+import re
 from pathlib import Path
 
 import tiktoken
@@ -36,12 +37,130 @@ def _is_boundary(tokens, i):
     return i == 0 or ENC.decode([tokens[i - 1]]).isspace()
 
 
-def build(size=512):
-    """Chunk every corpus file. Returns a list of chunk records."""
+# Sentences end here, except before a decimal point or an abbreviation. The
+# corpus is scraped prose, so bare "r." is rare, but version numbers and
+# "Fig. 3" do appear and splitting on them produces two-token fragments.
+_SENT = re.compile(r"(?<=[.!?])[\"')\]]*\s+(?=[A-Z(\\$])")
+
+
+def split_sentences(text):
+    """Split on sentence boundaries, guarding the ones that are not.
+
+    Deliberately not `re.split(r"(?<=[.!?])\\s+")`: that shreds this corpus,
+    which is wrapped one-line-per-source-line with no blank lines, into bare
+    "." fragments and splits attribute tables mid-row.
+    """
+    parts, buf = [], ""
+    for token in _SENT.split(text):
+        if not token.strip():
+            continue
+        buf = f"{buf} {token}" if buf else token
+        # A boundary we reject goes back into the buffer as its own sentence
+        # boundary candidate only if it also ends a sentence; otherwise the
+        # split point was an abbreviation and the pieces must rejoin.
+        if _really_ends_sentence(buf):
+            parts.append(buf.strip())
+            buf = ""
+    if buf.strip():
+        parts.append(buf.strip())
+    return parts
+
+
+def _really_ends_sentence(text):
+    stripped = text.rstrip()
+    if not stripped:
+        return False
+    if stripped[-1] not in ".!?":
+        return False
+    if stripped[-1] == "?":
+        return True
+    body = stripped[:-1].rstrip("\"')]").rstrip()
+    tail = body.rsplit(" ", 1)[-1] if " " in body else body
+    # A lone capital initial ("J.") or a known abbreviation is not an ending.
+    if re.fullmatch(r"[A-Za-z]", tail) or re.fullmatch(r"(?:\d+\.)+", tail):
+        return False
+    return True
+
+
+def chunk_text_para(text, size=512, overlap=64):
+    """Sentence-aware chunking: pack whole paragraphs, never split mid-sentence
+    unless a paragraph is larger than `size`, and repeat the last `overlap`
+    tokens of the previous chunk at the head of the next.
+
+    Two properties the fixed-size baseline cannot give, both aimed at the
+    same defect: a sentence is never cut in half, and a sentence that would
+    straddle a boundary appears whole in at least one chunk.
+    """
+    units = []
+    for para in text.split("¶"):
+        para = para.strip()
+        if not para:
+            continue
+        tokens = len(ENC.encode(para))
+        if tokens <= size:
+            units.append(para)
+            continue
+        # Oversized paragraph: fall back to sentence packing within it.
+        buf = ""
+        for sent in split_sentences(para):
+            if buf and len(ENC.encode(buf + " " + sent)) > size:
+                units.append(buf)
+                buf = sent
+            else:
+                buf = f"{buf} {sent}" if buf else sent
+            # A single sentence longer than `size` still has to be cut, or it
+            # would exceed the embedding budget on its own.
+            while len(ENC.encode(buf)) > size:
+                toks = ENC.encode(buf)
+                units.append(ENC.decode(toks[:size]))
+                buf = ENC.decode(toks[size:])
+        if buf:
+            units.append(buf)
+
+    chunks, buf = [], ""
+    for unit in units:
+        if buf and len(ENC.encode(buf + "\n\n" + unit)) > size:
+            closed = buf
+            chunks.append(closed)
+            # The carried-over sentence is paid for out of the *next* chunk's
+            # budget, so it is skipped rather than allowed to overflow. Never
+            # drop units to make room: that loses text outright, and no recall
+            # gain is worth a document silently leaving the corpus.
+            head = _overlap_tail(closed, overlap) if overlap else ""
+            if head and len(ENC.encode(head + "\n\n" + unit)) <= size:
+                buf = f"{head}\n\n{unit}"
+            else:
+                buf = unit
+            continue
+        buf = f"{buf}\n\n{unit}" if buf else unit
+    if buf:
+        chunks.append(buf)
+    return chunks
+
+
+def _overlap_tail(text, n):
+    """The last `n` tokens of `text`, snapped forward to a sentence start."""
+    if n <= 0:
+        return ""
+    toks = ENC.encode(text)
+    if len(toks) <= n:
+        return text
+    parts = split_sentences(ENC.decode(toks[-n:]))
+    return parts[0] if parts else ENC.decode(toks[-n:])
+
+
+def build(size=512, strategy="fixed"):
+    """Chunk every corpus file. Returns a list of chunk records.
+
+    `strategy` is the ablation axis: "fixed" is the whitespace/token cut, "para"
+    packs whole `¶` paragraphs and only falls back to sentence splitting for
+    paragraphs larger than `size`.
+    """
+    cut = chunk_text if strategy == "fixed" else chunk_text_para
     out = []
     for path in sorted(CORPUS.glob("*.txt")):
         doc_id = path.stem
-        for i, text in enumerate(chunk_text(path.read_text(), size)):
+        for i, text in enumerate(cut(path.read_text(), size)):
             n = len(ENC.encode(text))
             if n < 30:  # drop fragments too small to retrieve against
                 continue
@@ -117,11 +236,13 @@ if __name__ == "__main__":
     if "--selfcheck" in sys.argv:
         _selfcheck(size)
         raise SystemExit
-    chunks = build(size)
-    out = ROOT / f"data/chunks_{size}.jsonl"
+    strategy = "para" if "--para" in sys.argv else "fixed"
+    chunks = build(size, strategy)
+    suffix = "" if strategy == "fixed" else f"_{strategy}"
+    out = ROOT / f"data/chunks_{size}{suffix}.jsonl"
     out.parent.mkdir(exist_ok=True)
     with out.open("w") as f:
         for c in chunks:
             f.write(json.dumps(c) + "\n")
-    print(f"{len(chunks)} chunks @ {size} tokens -> {out}")
+    print(f"{len(chunks)} chunks @ {size} tokens ({strategy}) -> {out}")
     print(f"total tokens: {sum(c['tokens'] for c in chunks)}")

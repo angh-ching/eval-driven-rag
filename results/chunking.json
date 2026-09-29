@@ -1,0 +1,91 @@
+[
+  {
+    "strategy": "fixed",
+    "chunk_size": 256,
+    "hit@k": 1.0,
+    "all@k": 0.875,
+    "mrr": 0.8125,
+    "abstain@k": 0.0,
+    "n_answerable": 24,
+    "n_unanswerable": 6,
+    "missed_ids": [
+      9,
+      18,
+      24
+    ]
+  },
+  {
+    "strategy": "fixed",
+    "chunk_size": 512,
+    "hit@k": 1.0,
+    "all@k": 0.9166666666666666,
+    "mrr": 0.8888888888888888,
+    "abstain@k": 0.0,
+    "n_answerable": 24,
+    "n_unanswerable": 6,
+    "missed_ids": [
+      19,
+      24
+    ]
+  },
+  {
+    "strategy": "fixed",
+    "chunk_size": 1024,
+    "hit@k": 1.0,
+    "all@k": 0.9166666666666666,
+    "mrr": 0.8402777777777777,
+    "abstain@k": 0.0,
+    "n_answerable": 24,
+    "n_unanswerable": 6,
+    "missed_ids": [
+      19,
+      24
+    ]
+  },
+  {
+    "strategy": "para",
+    "chunk_size": 256,
+    "hit@k": 0.9583333333333334,
+    "all@k": 0.7916666666666666,
+    "mrr": 0.7916666666666666,
+    "abstain@k": 0.0,
+    "n_answerable": 24,
+    "n_unanswerable": 6,
+    "missed_ids": [
+      9,
+      16,
+      18,
+      19,
+      24
+    ]
+  },
+  {
+    "strategy": "para",
+    "chunk_size": 512,
+    "hit@k": 0.9583333333333334,
+    "all@k": 0.9166666666666666,
+    "mrr": 0.8333333333333334,
+    "abstain@k": 0.0,
+    "n_answerable": 24,
+    "n_unanswerable": 6,
+    "missed_ids": [
+      9,
+      16
+    ]
+  },
+  {
+    "strategy": "para",
+    "chunk_size": 1024,
+    "hit@k": 0.9583333333333334,
+    "all@k": 0.875,
+    "mrr": 0.8472222222222222,
+    "abstain@k": 0.0,
+    "n_answerable": 24,
+    "n_unanswerable": 6,
+    "missed_ids": [
+      9,
+      16,
+      19
+    ]
+  }
+]

@@ -18,24 +18,27 @@ MODEL = SentenceTransformer("all-MiniLM-L6-v2")
 RERANKER = None  # loaded lazily; only the rerank rung needs it
 
 
-def load_chunks(size=512):
-    path = ROOT / f"data/chunks_{size}.jsonl"
+def load_chunks(size=512, strategy="fixed"):
+    suffix = "" if strategy == "fixed" else f"_{strategy}"
+    path = ROOT / f"data/chunks_{size}{suffix}.jsonl"
     return [json.loads(l) for l in path.read_text().splitlines()]
 
 
 _CACHE = {}
 
 
-def indexes(size):
-    """Build (chunks, dense, bm25) once per chunk size and keep them.
+def indexes(size, strategy="fixed"):
+    """Build (chunks, dense, bm25) once per chunk size and strategy.
 
     Embedding the chunks is fast; doing it per query is what made the viewer
-    feel broken. Keyed by size so the chunk-size switch still works.
+    feel broken. Keyed by (size, strategy) so the chunk-size switch still works
+    and the sentence-aware build is a separate axis from the size.
     """
-    if size not in _CACHE:
-        chunks = load_chunks(size)
-        _CACHE[size] = (chunks, DenseRetriever(chunks), BM25Retriever(chunks))
-    return _CACHE[size]
+    key = (size, strategy)
+    if key not in _CACHE:
+        chunks = load_chunks(size, strategy)
+        _CACHE[key] = (chunks, DenseRetriever(chunks), BM25Retriever(chunks))
+    return _CACHE[key]
 
 
 def _embed(texts, model=None):
@@ -86,7 +89,7 @@ def rrf(dense, sparse, k=60, weights=(1.0, 1.0)):
 
 
 def retrieve(query, size=512, method="hybrid", top_k=5, rerank_n=20,
-              threshold=None, dense_weight=0.5):
+              threshold=None, dense_weight=0.5, strategy="fixed"):
     """Return up to top_k (chunk, score) pairs, best first.
 
     `threshold` is a relevance floor: if the best score falls under it,
@@ -96,7 +99,7 @@ def retrieve(query, size=512, method="hybrid", top_k=5, rerank_n=20,
     The floor is per-method and not comparable across methods — cosine sits
     in [-1,1], RRF sums 1/(k+rank), the cross-encoder emits logits.
     """
-    chunks, dense_r, bm25_r = indexes(size)
+    chunks, dense_r, bm25_r = indexes(size, strategy)
     dense = dense_r.scores(query)
     scores = dense
 

@@ -18,7 +18,8 @@ GOLDEN = [json.loads(l)
           for l in (ROOT / "eval/golden.jsonl").read_text().splitlines()]
 
 
-def evaluate(size=512, method="dense", k=5, threshold=None, dense_weight=0.5):
+def evaluate(size=512, method="dense", k=5, threshold=None, dense_weight=0.5,
+             strategy="fixed"):
     """Score the two slices separately.
 
     Answerable and unanswerable items measure different things and have
@@ -27,13 +28,13 @@ def evaluate(size=512, method="dense", k=5, threshold=None, dense_weight=0.5):
     retriever returns top_k by construction and cannot return zero without
     an explicit threshold.
     """
-    hits, alls, rr = [], [], []
+    hits, alls, rr, ids = [], [], [], []
     abstained = []
 
     for item in GOLDEN:
         results = retrieve(item["question"], size=size, method=method,
                            top_k=k, threshold=threshold,
-                           dense_weight=dense_weight)
+                           dense_weight=dense_weight, strategy=strategy)
         got = [c["doc_id"] for c, _ in results]
         need = set(item["answer_doc_ids"])
 
@@ -42,6 +43,7 @@ def evaluate(size=512, method="dense", k=5, threshold=None, dense_weight=0.5):
             # abstention: count it as a miss on both metrics, not a skip.
             hits.append(bool(got) and any(d in need for d in got))
             alls.append(bool(got) and need.issubset(got))
+            ids.append(item["id"])
             rr.append(next((1 / (i + 1) for i, d in enumerate(got)
                             if d in need), 0.0))
         else:
@@ -54,6 +56,7 @@ def evaluate(size=512, method="dense", k=5, threshold=None, dense_weight=0.5):
         "abstain@k": float(np.mean(abstained)) if abstained else 0.0,
         "n_answerable": len(hits),
         "n_unanswerable": len(abstained),
+        "missed_ids": [i for i, ok in zip(ids, alls) if not ok],
     }
 
 
@@ -165,19 +168,9 @@ def sweep_dense_weight(k=5, size=512):
     rows = []
     for w in [round(0.05 * i, 2) for i in range(21)]:
         r = evaluate(size=size, method="hybrid", k=k, dense_weight=w)
-        # Which answerable questions the equal-weight build already loses.
-        lost = []
-        for item in GOLDEN:
-            if not item["answer_doc_ids"]:
-                continue
-            got = {c["doc_id"] for c, _ in
-                   retrieve(item["question"], size=size, method="hybrid",
-                            top_k=k, dense_weight=w)}
-            if not set(item["answer_doc_ids"]).issubset(got):
-                lost.append(item["id"])
-        rows.append({"dense_weight": w, "lost_ids": lost, **r})
+        rows.append({"dense_weight": w, **r})
         print(f"w={w:>4.2f}  hit@5={r['hit@k']:.3f}  all@5={r['all@k']:.3f}  "
-              f"mrr={r['mrr']:.3f}  all@5 misses: {lost or 'none'}")
+              f"mrr={r['mrr']:.3f}  all@5 misses: {r['missed_ids'] or 'none'}")
 
     (ROOT / "results/dense_weight.json").write_text(json.dumps(rows, indent=2))
     md = ["Dense-vs-BM25 fusion weight sweep. dense_weight=0 is BM25 alone,",
@@ -188,10 +181,43 @@ def sweep_dense_weight(k=5, size=512):
           "| dense_weight | hit@5 | all@5 | MRR | all@5 misses |",
           "|---|---|---|---|---|"]
     md += [f"| {r['dense_weight']:.2f} | {r['hit@k']:.3f} | {r['all@k']:.3f} | "
-           f"{r['mrr']:.3f} | {', '.join(map(str, r['lost_ids'])) or 'none'} |"
+           f"{r['mrr']:.3f} | {', '.join(map(str, r['missed_ids'])) or 'none'} |"
            for r in rows]
     (ROOT / "results/dense_weight.md").write_text("\n".join(md))
     print("\nwrote results/dense_weight.json and results/dense_weight.md")
+    return rows
+
+
+def sweep_chunking(k=5):
+    """Is the fixed-size cut actually costing anything measurable?
+
+    The sentence-aware chunker cuts mid-sentence endings from 78.8% to 60.0%
+    of chunks. The question this answers is whether that shows up in retrieval,
+    or whether it is a cosmetic improvement the metrics cannot see — which
+    would be the more useful thing to know.
+    """
+    rows = []
+    for strategy in ("fixed", "para"):
+        for size in (256, 512, 1024):
+            r = evaluate(size=size, method="hybrid", k=k, strategy=strategy)
+            rows.append({"strategy": strategy, "chunk_size": size, **r})
+            print(f"{strategy:>5} {size:>5}  hit@5={r['hit@k']:.3f}  "
+                  f"all@5={r['all@k']:.3f}  mrr={r['mrr']:.3f}  "
+                  f"misses: {r['missed_ids'] or 'none'}")
+
+    (ROOT / "results/chunking.json").write_text(json.dumps(rows, indent=2))
+    md = ["Fixed-size vs sentence-aware chunking, same retriever (hybrid, equal",
+          "weights). `para` packs whole paragraph blocks and only splits inside a",
+          "paragraph larger than the chunk size; the fixed build cuts on a token",
+          "count and leaves 78.8% of chunks ending mid-sentence against 60.0%.",
+          "",
+          "| chunker | size | hit@5 | all@5 | MRR | all@5 misses |",
+          "|---|---|---|---|---|---|"]
+    md += [f"| {r['strategy']} | {r['chunk_size']} | {r['hit@k']:.3f} | "
+           f"{r['all@k']:.3f} | {r['mrr']:.3f} | "
+           f"{', '.join(map(str, r['missed_ids'])) or 'none'} |" for r in rows]
+    (ROOT / "results/chunking.md").write_text("\n".join(md))
+    print("\nwrote results/chunking.json and results/chunking.md")
     return rows
 
 

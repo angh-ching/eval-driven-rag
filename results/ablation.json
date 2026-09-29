@@ -7,7 +7,15 @@
     "mrr": 0.8069444444444445,
     "abstain@k": 0.0,
     "n_answerable": 24,
-    "n_unanswerable": 6
+    "n_unanswerable": 6,
+    "missed_ids": [
+      1,
+      11,
+      18,
+      19,
+      21,
+      25
+    ]
   },
   {
     "chunk_size": 256,
@@ -17,7 +25,12 @@
     "mrr": 0.8125,
     "abstain@k": 0.0,
     "n_answerable": 24,
-    "n_unanswerable": 6
+    "n_unanswerable": 6,
+    "missed_ids": [
+      9,
+      18,
+      24
+    ]
   },
   {
     "chunk_size": 512,
@@ -27,7 +40,12 @@
     "mrr": 0.8381944444444445,
     "abstain@k": 0.0,
     "n_answerable": 24,
-    "n_unanswerable": 6
+    "n_unanswerable": 6,
+    "missed_ids": [
+      21,
+      24,
+      25
+    ]
   },
   {
     "chunk_size": 512,
@@ -37,7 +55,11 @@
     "mrr": 0.8888888888888888,
     "abstain@k": 0.0,
     "n_answerable": 24,
-    "n_unanswerable": 6
+    "n_unanswerable": 6,
+    "missed_ids": [
+      19,
+      24
+    ]
   },
   {
     "chunk_size": 512,
@@ -47,7 +69,11 @@
     "mrr": 0.9097222222222222,
     "abstain@k": 0.0,
     "n_answerable": 24,
-    "n_unanswerable": 6
+    "n_unanswerable": 6,
+    "missed_ids": [
+      19,
+      24
+    ]
   },
   {
     "chunk_size": 1024,
@@ -57,7 +83,12 @@
     "mrr": 0.8083333333333332,
     "abstain@k": 0.0,
     "n_answerable": 24,
-    "n_unanswerable": 6
+    "n_unanswerable": 6,
+    "missed_ids": [
+      19,
+      21,
+      24
+    ]
   },
   {
     "chunk_size": 1024,
@@ -67,6 +98,10 @@
     "mrr": 0.8402777777777777,
     "abstain@k": 0.0,
     "n_answerable": 24,
-    "n_unanswerable": 6
+    "n_unanswerable": 6,
+    "missed_ids": [
+      19,
+      24
+    ]
   }
 ]

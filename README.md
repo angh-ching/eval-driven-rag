@@ -281,13 +281,42 @@ labels are doc-level.
 **Chunking has no tests, so it has a self-check.** `chunk.py --selfcheck`
 asserts the two invariants a cut must never break — no text lost or
 duplicated, no chunk starting mid-word — and reports the weakness it does
-have: **22 of 33 chunks (67%) end mid-sentence**, because the cut is
-fixed-size and not sentence-aware, with zero overlap. That is asserted as a
-ceiling rather than a floor, so it can only improve, and a sentence-aware
-chunker is the ablation that moves it. Both self-checks were verified by
-sabotaging the function and confirming the assertion fires; the mid-word check
-in particular is offset-based, because the obvious version (`first_word in
-text`) passes a partial word, since `"ution" in text` is true.
+have: most chunks end mid-sentence, because the cut is fixed-size and not
+sentence-aware, with zero overlap. That is asserted as a ceiling rather than a
+floor, so it can only improve. Both self-checks were verified by sabotaging
+the function and confirming the assertion fires; the mid-word check in
+particular is offset-based, because the obvious version (`first_word in text`)
+passes a partial word, since `"ution" in text` is true.
+
+### Sentence-aware chunking made it worse (`results/chunking.md`)
+
+The obvious next rung: pack whole paragraphs, never cut a sentence, carry an
+overlap tail. It does what it says on the chunk-level metric and **loses on
+retrieval**.
+
+| chunker | size | hit@5 | all@5 | MRR | all@5 misses |
+|---|---|---|---|---|---|
+| fixed | 512 | **1.000** | 0.917 | **0.889** | 19, 24 |
+| para | 512 | 0.958 | 0.917 | 0.833 | 9, 16 |
+
+Mid-sentence endings drop 78.8% → 60.0% and nothing improves. Tracing id 16
+("how many previous actions does the model look at") shows why, and it is not
+a bug — the paragraph build contains the answer formula in exactly the same
+two chunks. What changes is the embedding's ranking:
+
+```
+dense rank of the vaep chunks        fixed: 1, 2, 3, 7      para: 4, 7, 6, 10
+```
+
+VAEP and xT are described in near-identical prose — both "look at previous
+actions to predict the next". Under a fixed token cut those two topics land in
+*different* chunks by accident, which separates their embeddings. Packing
+paragraphs removes that accident, and the two models stop being
+distinguishable. Coherence cost more here than the mid-sentence cuts gained.
+
+The chunker stays fixed. This is the clearest result in the project: a
+plausible, well-motivated improvement that the eval correctly rejected, and
+the reason is a property of the corpus, not a tuning mistake.
 
 ## Layout
 
