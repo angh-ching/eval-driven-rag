@@ -75,6 +75,21 @@ Retrieval and the ablation ladder need no API key at all — they run entirely
 on local models. Only `app.py`'s Generate button and `bench/loadtest.py` call a
 generation API.
 
+### Deploy the trace viewer
+
+[Streamlit Community Cloud](https://share.streamlit.io) hosts `app.py` straight
+from this repo. The corpus and the pre-built chunk files are committed, so
+there is no build step — the app downloads the embedding and reranker models
+on first run, which takes about a minute.
+
+1. Push this repo, then open <https://share.streamlit.io> and **Deploy**.
+2. Pick this repository, branch `main`, main file `app.py`.
+3. Add one secret, `ANTHROPIC_API_KEY`. Without it the app still runs — only
+   the **Generate** button is disabled; retrieval, scores, and traces all work.
+
+Community Cloud issues a permanent `*.streamlit.app` URL. Add that link to
+the top of this file once it is live.
+
 ## Reproduce
 
 ```bash
