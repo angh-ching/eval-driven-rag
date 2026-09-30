@@ -5,6 +5,28 @@ around one question: **does a change to the retriever actually improve
 answers, or does it just look better on a metric?** Everything here is
 measured on a hand-labeled set and reproducible from a script.
 
+**Try it:** `streamlit run app.py` — an interactive trace viewer that shows
+every retrieval stage, its scores, and the answer with citations.
+
+## Results at a glance
+
+30 hand-labeled questions, scored as two slices with separate denominators.
+
+| What | Result |
+|---|---|
+| Retrieval strategy, chunk size held at 512 | `all@5` **0.875 → 0.917**; MRR **0.838 → 0.910** (dense → hybrid → rerank) |
+| Best cell in the whole ladder | 512-token chunks, hybrid, reranked — `all@5` 0.917, MRR 0.910 |
+| What it still can't do | The relevance floor rejects only **1 of 6** unanswerable questions |
+| Label audit findings | **3** of my own labels were wrong; correcting them *raised* the score with no retrieval change |
+| Retrieval regressions the eval caught | Fusion **loses** a question that dense alone ranks 2nd |
+
+Two of those rows are the point of the project. A retrieval change that lost
+a question, and three bad labels I found by reading the corpus document by
+document — a system that only prints a top-line number cannot show you either.
+
+Full ladder, threshold curve, and known-failure notes below; every number is
+generated into `results/`.
+
 ## Why this shape
 
 Most RAG writeups show one number and no way to check it. This one ships the
