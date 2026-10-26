@@ -1,8 +1,9 @@
 # Talking about this project
 
-Material for a recruiter screen and an AI Engineer interview. Every number here
-is transcribed from `results/ablations.md` or `results/threshold.md` — nothing
-is asserted that isn't in a generated file.
+Material for a recruiter screen and an AI Engineer interview. Every retrieval
+number here is transcribed from `results/ablations.md` or
+`results/threshold.md`, and the latency numbers from `results/latency.md` —
+nothing is asserted that isn't in a generated file.
 
 ---
 
@@ -54,11 +55,10 @@ Three lines. Numbers first.
   and gold-label agreement, so every eval number is inspectable per query
   instead of taken on faith.
 
-**Do not put the serving or load-test work on the resume.** The harness is
-built but no valid latency table exists — the dev proxy in this environment
-strips `cache_control` and rate-limits concurrency past 1. It comes up in
-conversation, where the blocker is a good answer. A resume bullet whose number
-you cannot produce on request is a liability.
+**Serving claim — keep it scoped.** The app's default answer path is
+extractive and keyless. The load test is real, but it measures retrieval plus
+extraction, not LLM generation. Do not present those numbers as LLM serving
+latency; the optional Ollama path has no published table.
 
 ---
 
@@ -156,15 +156,16 @@ straight into the existing tables.
 
 **"You said the load test is written but unpublished."**
 
-Yes. The environment's dev proxy silently strips `cache_control`, so the
-prompt-cache A/B would have measured nothing, and the single shared credential
-enters a ~100s cooldown after a handful of requests, so concurrency above 1
-can't be sustained long enough to produce a real p99. I built the harness to
-report p50/p95/p99, throughput, and cost including the cache write, and every
-result row carries a `cache_engaged` flag so a provider that ignored
-`cache_control` couldn't be misread as a caching win. But I didn't publish the
-partial numbers, because the cached arm only looked cheaper *because the
-directive was dropped*. With a direct Anthropic key it's one command.
+The first version wasn't publishable: it depended on a hosted model, the dev
+proxy stripped `cache_control`, and the shared credential cooldown made
+concurrency above 1 impossible. Rather than quote noise, I removed the paid
+dependency. The shipped path is extractive and keyless, and the benchmark now
+measures the request that actually runs: retrieval plus extraction, n=20,
+rerank @ 512. At concurrency 1 it is p50 0.357s, p99 0.390s, 2.77 qps. Throughput
+stays flat as concurrency rises to 8 because the cross-encoder is CPU-bound —
+more threads contend, they don't parallelise. Those are honest retrieval
+numbers, not LLM serving numbers. The optional Ollama path would need its own
+table.
 
 ---
 
@@ -175,5 +176,7 @@ directive was dropped*. With a direct Anthropic key it's one command.
   corpus where top-5 is a sixth of everything. Quote **all@5 0.917, 22 of 24**.
 - **"Improved retrieval by 22%."** 0.750 → 0.917 is a 0.17 absolute gain. Quote
   the absolute numbers; a percentage makes a small lift sound large.
-- **Anything about load testing or serving.** No valid latency table exists.
+- **Anything about LLM serving or prompt caching.** The shipped answer path is
+  extractive and keyless; the latency table covers retrieval plus extraction,
+  not hosted or local LLM generation.
 - **"Production-grade."** It's a 14-page corpus and a Streamlit viewer.

@@ -1,8 +1,9 @@
 """Trace viewer: for any question, show what was retrieved, with what
-score, and what the model answered from it.
+score, and what answer was extracted from it.
 
 This is the artefact that makes the eval numbers checkable instead of
-something a reader has to take on faith.
+something a reader has to take on faith. The default answer path is
+extractive, so the whole app runs without an API key.
 """
 import json
 import sys
@@ -13,7 +14,7 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from answer import answer  # noqa: E402
+from answer import answer, provider_name  # noqa: E402
 from retrieve import retrieve  # noqa: E402
 
 GOLDEN = [json.loads(l) for l in
@@ -41,13 +42,16 @@ with st.sidebar:
                             value=False)
     floor = st.slider("floor", -12.0, 8.0, float(FLOOR), 0.01,
                       disabled=not use_floor)
+    st.caption(f"answer provider: `{provider_name()}` · no API key needed")
+    if provider_name() == "extractive":
+        st.caption("Set `RAG_PROVIDER=ollama` for a local LLM answer.")
 
 q = own.strip() or ("" if pick.startswith("—") else pick)
 if not q:
     st.info("Pick a question from the sidebar or type your own.")
     st.stop()
 
-# Retrieval always shows, even without an API key — that part is free.
+# Retrieval always shows without calling an answer provider — that part is free.
 hits = retrieve(q, size=size, method=method, top_k=k,
                 threshold=floor if use_floor else None)
 label = next((g for g in GOLDEN if g["question"] == q), None)
@@ -82,14 +86,26 @@ if not st.button("Generate"):
     st.stop()
 
 try:
-    r = answer(q, size=size, method=method, top_k=k)
-except Exception as e:  # missing key, rate limit, network
+    r = answer(q, size=size, method=method, top_k=k,
+               threshold=floor if use_floor else None)
+except Exception as e:  # local Ollama down, model missing, retrieval error
     st.error(f"{type(e).__name__}: {e}")
     st.stop()
 
 st.write(r["answer"])
+if r["provider"] == "extractive":
+    st.caption("Extractive answer: verbatim passages from the retrieved "
+               "chunks, not generated prose. Every quote carries its chunk id.")
+else:
+    st.caption(f"Generated locally by Ollama model `{r['model']}`.")
+
 cols = st.columns(4)
-cols[0].metric("latency", f"{r['latency_s']:.2f}s")
-cols[1].metric("input tok", r["input_tokens"])
-cols[2].metric("output tok", r["output_tokens"])
-cols[3].metric("cache read", r["cache_read_tokens"])
+cols[0].metric("provider", r["provider"])
+cols[1].metric("latency", f"{r['latency_s']:.2f}s")
+cols[2].metric("retrieved", len(r["chunks"]))
+cols[3].metric("cited", len(r["citations"]))
+
+if r["provider"] == "ollama":
+    tok = st.columns(2)
+    tok[0].metric("input tok", r["input_tokens"])
+    tok[1].metric("output tok", r["output_tokens"])

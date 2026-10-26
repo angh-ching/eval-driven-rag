@@ -6,7 +6,9 @@ answers, or does it just look better on a metric?** Everything here is
 measured on a hand-labeled set and reproducible from a script.
 
 **Try it:** `streamlit run app.py` — an interactive trace viewer that shows
-every retrieval stage, its scores, and the answer with citations.
+every retrieval stage, its scores, and the answer with citations. No API key
+is required: the default answer path is extractive, and a local Ollama model
+is optional.
 
 ## Results at a glance
 
@@ -19,10 +21,12 @@ every retrieval stage, its scores, and the answer with citations.
 | What it still can't do | The relevance floor rejects only **1 of 6** unanswerable questions |
 | Label audit findings | **3** of my own labels were wrong; correcting them *raised* the score with no retrieval change |
 | Retrieval regressions the eval caught | Fusion **loses** a question that dense alone ranks 2nd |
+| Answer path | Keyless: extractive quotes with chunk ids; optional local Ollama |
 
-Two of those rows are the point of the project. A retrieval change that lost
-a question, and three bad labels I found by reading the corpus document by
-document — a system that only prints a top-line number cannot show you either.
+Two of those findings are the point of the project. A retrieval change that
+lost a question, and three bad labels I found by reading the corpus document
+by document — a system that only prints a top-line number cannot show you
+either.
 
 Full ladder, threshold curve, and known-failure notes below; every number is
 generated into `results/`.
@@ -30,7 +34,7 @@ generated into `results/`.
 ## Why this shape
 
 Most RAG writeups show one number and no way to check it. This one ships the
-eval harness, the traces behind the number, and the cost/latency measurements
+eval harness, the traces behind the number, and the latency measurements
 for the same pipeline — so the claims are auditable rather than asserted.
 
 ## How it works
@@ -46,14 +50,14 @@ flowchart LR
     R --> X[cross-encoder<br/>rerank top 20]
     X --> F{top score<br/>≥ floor?}
     F -->|no| N["abstain<br/>I don't know"]
-    F -->|yes| L[LLM answer<br/>+ citations]
+    F -->|yes| L[extractive answer<br/>+ citations]
     L --> V([streamlit trace viewer])
     N --> V
 ```
 
 Every box is a real function: chunker in `src/chunk.py`, the three retrievers
-and `rrf()` in `src/retrieve.py`, the floor branch in `retrieve()`, and
-generation in `src/answer.py`.
+and `rrf()` in `src/retrieve.py`, the floor branch in `retrieve()`, and the
+extractive answer in `src/answer.py`.
 
 Dense retrieval matches on meaning; BM25 matches on words. They fail
 differently — the embedding handles "how do I start?" → "installation", BM25
@@ -67,13 +71,29 @@ slowest stage and cannot rescue a document the first stage missed.
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-export ANTHROPIC_API_KEY=...      # only needed for generation and the load test
-python3 scripts/fetch_corpus.py   # downloads + cleans corpus/ (optional; already committed)
+python3 scripts/fetch_corpus.py   # optional; corpus/ is already committed
+streamlit run app.py
 ```
 
-Retrieval and the ablation ladder need no API key at all — they run entirely
-on local models. Only `app.py`'s Generate button and `bench/loadtest.py` call a
-generation API.
+No API key is needed. Retrieval, the ablation ladder, the trace viewer, and the
+default **Generate** button all run locally. `src/answer.py` extracts verbatim
+passages from the retrieved chunks and tags each with its chunk id, so the
+answer is auditable rather than model-authored.
+
+### Optional: local LLM answers
+
+If you want generated prose instead of verbatim extraction, install
+[Ollama](https://ollama.com), start it, and pull a model:
+
+```bash
+ollama serve
+ollama pull qwen2.5:3b-instruct
+export RAG_PROVIDER=ollama      # optional; override with RAG_MODEL=...
+streamlit run app.py
+```
+
+This is still keyless. Nothing in the eval harness depends on it, and the
+published latency numbers use the default extractive path.
 
 ### Deploy the trace viewer
 
@@ -84,8 +104,9 @@ on first run, which takes about a minute.
 
 1. Push this repo, then open <https://share.streamlit.io> and **Deploy**.
 2. Pick this repository, branch `main`, main file `app.py`.
-3. Add one secret, `ANTHROPIC_API_KEY`. Without it the app still runs — only
-   the **Generate** button is disabled; retrieval, scores, and traces all work.
+
+No secrets are needed. Generation defaults to local extraction; the app
+downloads the embedding and reranker models on first run.
 
 Community Cloud issues a permanent `*.streamlit.app` URL. Add that link to
 the top of this file once it is live.
@@ -96,9 +117,10 @@ the top of this file once it is live.
 python3 src/chunk.py 512           # corpus -> data/chunks_512.jsonl
 python3 src/chunk.py 512 --selfcheck   # assert no text lost / no mid-word cuts
 python3 src/retrieve.py            # assert default fusion is unweighted RRF
+python3 src/answer.py              # assert extraction quotes + cites, abstains
 python3 src/metrics.py             # ablations + weight sweep + floor curve -> results/
 python3 bench/loadtest.py --concurrency 1,4,8 --n 20   # results/latency.json
-streamlit run app.py               # trace viewer
+streamlit run app.py               # trace viewer, no API key
 ```
 
 If you are reviewing this as a candidate: [`docs/INTERVIEW.md`](docs/INTERVIEW.md)
@@ -252,45 +274,40 @@ two score distributions overlap and no floor separates them. The honest
 conclusion is that **6 unanswerable items is far too few to fit or validate a
 floor on**; the curve is the deliverable, the operating point is not a claim.
 
-### Generation and serving — harness written, not yet measured
+### Answering and serving — keyless, measured
 
-`bench/loadtest.py` is complete: it sweeps concurrency, arms the prompt cache
-on and off, and reports p50/p95/p99, throughput, and cost per question
-including the one-off cache write. Every result row carries
-`cache_engaged`, so a run where the provider silently ignored
-`cache_control` cannot be mistaken for a caching win.
+The default answer path is extractive, not generative. `src/answer.py` selects
+up to three verbatim passages from the top-ranked chunks, at most one per
+chunk, requires literal term overlap with the question, and tags every quote
+with its chunk id. If no excerpt shares a content term with the question, it
+abstains rather than paraphrasing from memory. That is the trade: no key, no
+network, no invented prose, but also no synonym-level synthesis. A question
+whose answer is phrased completely differently in the corpus gets a worse
+answer than an LLM would give.
 
-**No latency table is published, because no valid run completed.** Two
-independent blockers, both environmental:
+A local Ollama model is optional (`RAG_PROVIDER=ollama`); the published
+numbers below use the default extractive path, because that is what a fresh
+clone runs.
 
-- The dev proxy in this environment exposes exactly one usable model
-  (`ling-3.0-flash-sante:free`) and strips `cache_control` from requests, so
-  the caching A/B cannot be measured — both arms would be the same run.
-- That model's single shared credential enters a ~100 s cooldown after a
-  handful of requests, so concurrency > 1 cannot be sustained long enough to
-  produce a p99.
+`bench/loadtest.py` measures the full request — retrieval plus extraction — at
+three concurrency levels. There is no prompt-cache arm and no cost column,
+because no paid call happens. n=20, rerank @ 512 tokens, CPU only:
 
-Partial serial data from the one arm that did complete, before cooldowns began:
+| concurrency | p50 | p95 | p99 | qps |
+|---|---|---|---|---|
+| 1 | 0.357s | 0.389s | 0.390s | 2.77 |
+| 4 | 1.419s | 1.603s | 1.605s | 2.76 |
+| 8 | 2.865s | 2.960s | 2.971s | 2.74 |
 
-```
-c=1  cache=False  p50=3.87s  p99=10.85s  qps=0.19  $0.380/20q
-c=1  cache=True   p50=4.45s  p99=19.68s  qps=0.17  $0.264/20q
-```
+**Read the shape, not the absolute numbers.** Throughput is flat at ~2.75
+questions/s while p50 rises almost linearly with concurrency: the reranker is
+CPU-bound, so extra threads contend rather than parallelise. These numbers are
+machine-specific and say nothing about LLM serving latency. They do show that
+the keyless pipeline shipped here is fast enough to use interactively at
+concurrency 1, which is what the Streamlit viewer does.
 
-Those two rows are **not** a result. The cache arm was cheaper only because
-the provider dropped the cache directives, and the latency difference is
-single-sample noise. Quoting them would be exactly the overclaiming this
-project exists to avoid.
-
-To produce the real table, run against a direct Anthropic key:
-
-```bash
-export ANTHROPIC_API_KEY=sk-ant-...
-export ANTHROPIC_BASE_URL=https://api.anthropic.com   # bypass the local proxy
-unset ANTHROPIC_DEFAULT_HAIKU_MODEL
-export RAG_MODEL=claude-sonnet-5
-python3 bench/loadtest.py --concurrency 1,4,8 --n 40
-```
+`results/latency.json` and `results/latency.md` are generated by the command
+above.
 
 ## Design notes worth knowing
 
@@ -363,8 +380,8 @@ eval/golden.jsonl  30 hand-labeled items
 src/chunk.py       fixed-size token chunker
 src/retrieve.py    dense / BM25 / RRF hybrid / cross-encoder rerank
 src/metrics.py     hit@k, all@k, MRR + ablation runner
-src/answer.py      generation with prompt-prefix caching
+src/answer.py      keyless extractive answers + optional local Ollama
 app.py             Streamlit trace viewer
-bench/loadtest.py  concurrency sweep, latency percentiles, cost
+bench/loadtest.py  concurrency sweep, latency percentiles
 results/           generated tables
 ```

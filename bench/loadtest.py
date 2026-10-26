@@ -1,15 +1,16 @@
-"""Load test: sweep concurrency, report p50/p99 latency and token cost.
+"""Load test for the keyless answer path.
 
-Compares the same run with and without prompt caching. The first call in
-each config is discarded from the timing: it pays the cache write, and
-including it would flatter the uncached arm on cost. Its tokens are added
-back separately so the write is still reported.
+Sweeps concurrency and reports p50/p95/p99 latency and throughput for the
+full request: retrieval plus answer extraction. There is no API client, no
+token cost, and no cache arm, because the default path makes no paid call.
 
   python3 bench/loadtest.py --concurrency 1,4,8 --n 20
+
+Set RAG_PROVIDER=ollama to benchmark a local Ollama model instead. That is
+still keyless, but the numbers are model- and machine-specific.
 """
 import argparse
 import json
-import re
 import statistics
 import sys
 import time
@@ -21,71 +22,36 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from answer import answer  # noqa: E402
+from answer import answer, provider_name  # noqa: E402
 from retrieve import indexes  # noqa: E402
 
 GOLDEN = [json.loads(l) for l in
           (ROOT / "eval/golden.jsonl").read_text().splitlines()]
 ANSWERABLE = [g["question"] for g in GOLDEN if g["answer_doc_ids"]]
 
-# Published Sonnet list prices, USD per million tokens. Pinned in the file
-# so the cost column is reproducible without re-checking pricing.
-IN_PRICE, OUT_PRICE = 3.0 / 1e6, 15.0 / 1e6
-CACHE_READ_PRICE = IN_PRICE * 0.1
-CACHE_WRITE_PRICE = IN_PRICE * 1.25
 
-
-def price(r):
-    return (r["input_tokens"] * IN_PRICE
-            + r["output_tokens"] * OUT_PRICE
-            + r["cache_read_tokens"] * CACHE_READ_PRICE
-            + r["cache_write_tokens"] * CACHE_WRITE_PRICE)
-
-
-def call(q, client, cache_prompt, retries=6):
-    """One request, honouring the server's own cooldown.
-
-    Free-tier providers cool down under concurrency, and each rejected
-    attempt re-arms the timer — so exponential backoff starting small just
-    burns the retry budget. Sleep the `reset_seconds` the 429 reports, plus
-    margin. Retrying keeps the sample full instead of dropping slow requests,
-    which would bias p99 downward.
-    """
-    for attempt in range(retries):
-        try:
-            return answer(q, client=client, cache_prompt=cache_prompt)
-        except Exception as e:
-            if "429" not in str(e) and "RateLimit" not in type(e).__name__:
-                raise
-            if attempt == retries - 1:
-                raise
-            m = re.search(r"reset_seconds['\"]?\s*[:=]\s*(\d+)", str(e))
-            wait = int(m.group(1)) + 10 if m else 2 ** attempt * 30
-            print(f"    429, sleeping {wait}s (attempt {attempt + 1})",
-                  flush=True)
-            time.sleep(wait)
-
-
-def one_config(questions, concurrency, cache_prompt, client):
-    # Warm the prefix cache and the retrieval index before timing. The warm
-    # call pays the cache write; we keep its cost but drop its latency.
-    indexes(512)
-    warm = call(questions[0], client, cache_prompt)
+def one_config(questions, concurrency, method, size, k):
+    # Build the retrieval indexes and warm the reranker before timing. The
+    # warm request is excluded from the percentiles; it measures setup, not
+    # request latency.
+    indexes(size)
+    answer(questions[0], size=size, method=method, top_k=k)
 
     t0 = time.perf_counter()
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
-        rows = list(pool.map(lambda q: call(q, client, cache_prompt), questions))
+        rows = list(pool.map(
+            lambda q: answer(q, size=size, method=method, top_k=k),
+            questions,
+        ))
     wall = time.perf_counter() - t0
 
     lat = [r["latency_s"] for r in rows]
-    cache_reads = sum(r["cache_read_tokens"] for r in rows)
     return {
+        "provider": provider_name(),
+        "method": method,
+        "chunk_size": size,
+        "k": k,
         "concurrency": concurrency,
-        "cache_prompt": cache_prompt,
-        # If the provider silently ignores cache_control, reads stay 0 and
-        # this is False — the two arms are then the same run twice and the
-        # cost difference between them is noise. Check it before citing.
-        "cache_engaged": cache_reads > 0,
         "n": len(rows),
         "wall_s": wall,
         "qps": len(rows) / wall,
@@ -93,8 +59,6 @@ def one_config(questions, concurrency, cache_prompt, client):
         "p95": float(np.percentile(lat, 95)),
         "p99": float(np.percentile(lat, 99)),
         "mean": statistics.fmean(lat),
-        "cost_usd": sum(price(r) for r in rows) + price(warm),
-        "cache_read_tokens": cache_reads,
     }
 
 
@@ -102,27 +66,41 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--concurrency", default="1,4,8")
     ap.add_argument("--n", type=int, default=20)
+    ap.add_argument("--method", default="rerank",
+                    choices=["dense", "hybrid", "rerank"])
+    ap.add_argument("--size", type=int, default=512,
+                    choices=[256, 512, 1024])
+    ap.add_argument("--k", type=int, default=5)
     ap.add_argument("--out", default=str(ROOT / "results/latency.json"))
     args = ap.parse_args()
 
-    import anthropic
-    client = anthropic.Anthropic()
     qs = [ANSWERABLE[i % len(ANSWERABLE)] for i in range(args.n)]
-
     rows = []
+    print(f"provider={provider_name()} method={args.method} "
+          f"size={args.size} k={args.k} n={args.n}")
     for c in [int(x) for x in args.concurrency.split(",")]:
-        for cache_prompt in (False, True):
-            r = one_config(qs, c, cache_prompt, client)
-            rows.append(r)
-            flag = "" if (not cache_prompt or r["cache_engaged"]) else \
-                "  [cache_engaged=false: provider ignored cache_control]"
-            print(f"c={c:<2} cache={str(cache_prompt):<5}  "
-                  f"p50={r['p50']:.2f}s  p99={r['p99']:.2f}s  "
-                  f"qps={r['qps']:.2f}  ${r['cost_usd']:.3f}/{r['n']}q{flag}")
+        r = one_config(qs, c, args.method, args.size, args.k)
+        rows.append(r)
+        print(f"c={c:<2}  p50={r['p50']:.3f}s  p95={r['p95']:.3f}s  "
+              f"p99={r['p99']:.3f}s  qps={r['qps']:.2f}  "
+              f"wall={r['wall_s']:.2f}s")
 
-    Path(args.out).parent.mkdir(exist_ok=True)
-    Path(args.out).write_text(json.dumps(rows, indent=2))
-    print(f"\nwrote {args.out}")
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(rows, indent=2))
+
+    md = [f"Keyless {rows[0]['provider']} answer path — {args.method} "
+          f"retrieval, {args.size}-token chunks, k={args.k}. "
+          f"n={args.n} per concurrency level.",
+          "",
+          "| concurrency | p50 | p95 | p99 | qps | wall |",
+          "|---|---|---|---|---|---|"]
+    md += [f"| {r['concurrency']} | {r['p50']:.3f}s | {r['p95']:.3f}s | "
+           f"{r['p99']:.3f}s | {r['qps']:.2f} | {r['wall_s']:.2f}s |"
+           for r in rows]
+    md_path = out.with_suffix(".md")
+    md_path.write_text("\n".join(md))
+    print(f"\nwrote {out} and {md_path}")
 
 
 if __name__ == "__main__":
